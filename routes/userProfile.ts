@@ -51,8 +51,34 @@ export function getUserProfile () {
     }
 
     let username = user.username
-
-    username = '\\' + username
+    
+    if (username?.match(/#{(.*)}/) !== null && utils.isChallengeEnabled(challenges.usernameXssChallenge)) {
+      req.app.locals.abused_ssti_bug = true
+      const code = username?.substring(2, username.length - 1)
+    
+      try {
+        if (!code) {
+          throw new Error('Username is null')
+        }
+    
+        // Вместо eval делаем безопасный парсинг "выражения"
+        // Разрешаем только математические операции и простые строки
+        const safeExpression = code.replace(/[^0-9+\-*/(). ]/g, '') // разрешаем только цифры и +-*()/.
+        if (safeExpression) {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function(`return ${safeExpression}`)
+          username = fn().toString()
+        } else {
+          username = '\\' + username
+        }
+    
+      } catch (err) {
+        username = '\\' + username
+      }
+    
+    } else {
+      username = '\\' + username
+    }
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
